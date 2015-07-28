@@ -1,6 +1,6 @@
 import struct
 from ctypes import *
-from ollyapi import *
+from x64dbg_python import *
 
 
 class App(Structure):
@@ -14,32 +14,34 @@ class App(Structure):
 def bswap(val):
     return struct.unpack("<I", struct.pack(">I", val))[0]
 
-def get_section(section_name):
-    sections = GetPESections()
-    for section in sections:
-        if section.sectname == section_name:
-            return section.base
+def get_section(section_name, module=pluginsdk.GetMainModuleInfo()):
+    for i in xrange(module.sectionCount):
+        section = pluginsdk.SectionFromAddr(module.base, i)
+        if section.name == section_name:
+            return section
 
 def get_string(ea, max_length=1024):
     byte_array = bytearray()
     for offset in xrange(max_length + 1):
-        read_chr = ReadMemory(1, ea + offset)
-        if read_chr == '\0':
+        read_byte = pluginsdk.ReadByte(ea + offset)
+        if read_byte == 0:
             break
-        byte_array.append(read_chr)
+        byte_array.append(read_byte)
 
     return str(byte_array)
 
 
 if __name__ == '__main__':
-    Test1_address = FindHexInPage("Test1".encode('hex'), get_section('.rdata'))
-    Test1_pointer = FindHexInPage("%08X" % bswap(Test1_address), get_section('.data'))
+    rdata_section = get_section('.rdata')
+    Test1_address = pluginsdk.FindMem(rdata_section.addr, rdata_section.size, "Test1".encode('hex'))
+    data_section = get_section('.data')
+    Test1_pointer = pluginsdk.FindMem(data_section.addr, data_section.size, "%08X" % bswap(Test1_address))
     app_array_address = Test1_pointer - sizeof(c_int32)
 
     app_size = sizeof(App)
     app_offset = 0
     while True:
-        app = App.from_buffer_copy(ReadMemory(app_size, app_array_address + app_offset))
+        app = App.from_buffer_copy(pluginsdk.Read(app_array_address + app_offset, app_size))
         if not app.name:
             break
 
