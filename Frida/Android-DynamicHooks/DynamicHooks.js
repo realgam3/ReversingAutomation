@@ -10,32 +10,34 @@ function hook(obj, options) {
         Java.use(obj)[func].overload.apply(null, args).implementation = function () {
             var args = [].slice.call(arguments);
             var result = null;
+            // Call Origin Function If True
             if (callOriginal) {
                 result = this[func].apply(this, args);
             }
+            // Call Callback If Exist
             if (callback) {
                 result = callback(result, args);
             }
-
-
+            // Debug Log
             if (debug) {
                 var calledFrom = Exception.$new().getStackTrace().toString().split(',')[1];
                 var message = JSON.stringify({
-                    function: obj + "." + func,
                     arguments: args,
                     result: result,
                     calledFrom: calledFrom
                 });
                 console.log(obj + "." + func + "[\"Debug\"] => " + message);
             }
-
+            // Return Result
             return result;
         };
     } catch (err) {
+        // Error Log
         console.log(obj + "." + func + "[\"Error\"] => " + err);
     }
 }
 
+// Example Usage
 Java.perform(function () {
     hook("java.lang.Runtime", {
         function: "exec",
