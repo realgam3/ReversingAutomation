@@ -16,7 +16,7 @@ function hook(obj, options) {
             }
             // Call Callback If Exist
             if (callback) {
-                result = callback(result, args);
+                result = callback(result, args, this);
             }
             // Debug Log
             if (debug) {
@@ -44,7 +44,7 @@ Java.perform(function () {
         arguments: ["java.lang.String"],
         debug: true,
         callOriginal: true,
-        callback: function (originalResult, args) {
+        callback: function (originalResult, args, self) {
             console.log("Args: " + JSON.stringify(args));
             console.log("Result: " + originalResult);
             return originalResult;
