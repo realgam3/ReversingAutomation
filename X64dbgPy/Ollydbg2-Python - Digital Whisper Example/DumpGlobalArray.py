@@ -1,6 +1,6 @@
 import struct
 from ctypes import *
-from x64dbg_python import *
+from x64dbgpy import *
 
 
 class App(Structure):
