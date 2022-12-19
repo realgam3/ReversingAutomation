@@ -1,53 +1,107 @@
-function hook(obj, options) {
-    var Exception = Java.use('java.lang.Exception');
-    var func = options['function'] !== undefined ? options['function'] : '$init';
-    var args = options['arguments'] !== undefined ? options['arguments'] : [];
-    var debug = options['debug'] !== undefined ? options['debug'] : false;
-    var callOriginal = options['callOriginal'] !== undefined ? options['callOriginal'] : true;
-    var callback = options['callback'] = options['callback'];
+function hook(func, options) {
+    let klass, funk;
+    let Exception = Java.use("java.lang.Exception");
+
+    function getClassAndFunction(classFuncName) {
+        let klass = classFuncName.split(".");
+        let funk = klass.pop();
+        klass = klass.join(".");
+        return [klass, funk]
+    }
+
+    function defaultFunction(funcArgs, context, originalResult) {
+        return originalResult;
+    }
+
+    options = options || {
+        logLevel: 0,
+        callOriginal: true,
+        stackTrace: false,
+        callback: defaultFunction,
+        stringifyArguments: {},
+        stringifyResult: null,
+    };
+    let logLevel = options.logLevel || 0;
+    let stackTrace = options.stackTrace || false;
+    let callOriginal = options.callOriginal || true;
+    let stringifyArguments = options.stringifyArguments || {};
+    let stringifyResult = options.stringifyResult || null;
+    let args = options.arguments || [];
+    let callback = options.callback || defaultFunction;
+    try {
+        [klass, funk] = getClassAndFunction(func);
+    } catch (error) {
+        func += ".$init";
+        [klass, funk] = getClassAndFunction(func);
+    }
 
     try {
-        Java.use(obj)[func].overload.apply(null, args).implementation = function () {
-            var args = [].slice.call(arguments);
-            var result = null;
-            // Call Origin Function If True
+        let functionSignature = Java.use(klass)[funk];
+        functionSignature.overload.apply(functionSignature, args).implementation = function () {
+            let context = this;
+            let funcArgs = [].slice.call(arguments);
+            let result = null, originalResult = null;
+            let toStringArguments = [];
+            for (let i = 0; i < funcArgs.length; i++) {
+                let argType = args[i];
+                let toStringFunc = stringifyArguments[argType];
+                toStringArguments.push(toStringFunc ? toStringFunc(funcArgs[i]) : funcArgs[i]);
+            }
+            let message = {
+                stage: "calling",
+                function: func,
+                argumentTypes: args,
+                arguments: toStringArguments,
+            };
+
+            if (stackTrace) {
+                message.stackTrace = Exception.$new().getStackTrace().toString().split(",").slice(1);
+            }
+
+            if (logLevel >= 2) {
+                console.log(JSON.stringify(message));
+            }
+
             if (callOriginal) {
-                result = this[func].apply(this, args);
+                originalResult = functionSignature.overload.apply(functionSignature, args).apply(context, funcArgs);
             }
-            // Call Callback If Exist
-            if (callback) {
-                result = callback(result, args, this);
+            result = callback(funcArgs, context, originalResult);
+
+            message.stage = "return"
+            if (callOriginal && callback !== defaultFunction) {
+                message.originalResult = stringifyResult ? stringifyResult(originalResult, context) : originalResult;
             }
-            // Debug Log
-            if (debug) {
-                var calledFrom = Exception.$new().getStackTrace().toString().split(',')[1];
-                var message = JSON.stringify({
-                    arguments: args,
-                    result: result,
-                    calledFrom: calledFrom
-                });
-                console.log(obj + "." + func + "[\"Debug\"] => " + message);
+            message.result = stringifyResult ? stringifyResult(result, context) : result;
+
+            if (logLevel >= 1) {
+                console.log(JSON.stringify(message));
             }
-            // Return Result
+
             return result;
         };
-    } catch (err) {
-        // Error Log
-        console.log(obj + "." + func + "[\"Error\"] => " + err);
+    } catch (error) {
+        if (logLevel >= 1) {
+            console.error(JSON.stringify({
+                stage: "error",
+                function: func,
+                argumentTypes: args,
+                error: error.toString(),
+            }));
+        }
     }
 }
 
-// Example Usage
 Java.perform(function () {
-    hook("java.lang.Runtime", {
-        function: "exec",
-        arguments: ["java.lang.String"],
-        debug: true,
+    hook("java.security.MessageDigest.update", {
+        logLevel: 1,
+        arguments: ["[B"],
+        stringifyArguments: {
+            "[B": function (arg) {
+                let byteArray = Java.array("byte", arg);
+                return Array.from(byteArray).map(byte => (byte & 0xFF).toString(16).padStart(2, "0")).join("");
+            }
+        },
+        stackTrace: true,
         callOriginal: true,
-        callback: function (originalResult, args, self) {
-            console.log("Args: " + JSON.stringify(args));
-            console.log("Result: " + originalResult);
-            return originalResult;
-        }
     });
 });
