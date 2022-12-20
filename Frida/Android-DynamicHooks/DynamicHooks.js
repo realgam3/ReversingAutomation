@@ -1,3 +1,9 @@
+const LogLevel = {
+    None: 0,
+    Informational: 1,
+    Debug: 2
+}
+
 function hook(func, options) {
     let klass, funk;
     let Exception = Java.use("java.lang.Exception");
@@ -14,14 +20,14 @@ function hook(func, options) {
     }
 
     options = options || {
-        logLevel: 0,
+        logLevel: LogLevel.None,
         callOriginal: true,
         stackTrace: false,
         callback: defaultFunction,
         stringifyArguments: {},
         stringifyResult: null,
     };
-    let logLevel = options.logLevel || 0;
+    let logLevel = options.logLevel || LogLevel.None;
     let stackTrace = options.stackTrace || false;
     let callOriginal = options.callOriginal || true;
     let stringifyArguments = options.stringifyArguments || {};
@@ -37,7 +43,9 @@ function hook(func, options) {
 
     try {
         let functionSignature = Java.use(klass)[funk];
-        functionSignature.overload.apply(functionSignature, args).implementation = function () {
+        let functionContext = functionSignature.overload.apply(functionSignature, args);
+
+        functionContext.implementation = function () {
             let context = this;
             let funcArgs = [].slice.call(arguments);
             let result = null, originalResult = null;
@@ -58,12 +66,12 @@ function hook(func, options) {
                 message.stackTrace = Exception.$new().getStackTrace().toString().split(",").slice(1);
             }
 
-            if (logLevel >= 2) {
+            if (logLevel >= LogLevel.Debug) {
                 console.log(JSON.stringify(message));
             }
 
             if (callOriginal) {
-                originalResult = functionSignature.overload.apply(functionSignature, args).apply(context, funcArgs);
+                originalResult = functionContext.apply(context, funcArgs);
             }
             result = callback(funcArgs, context, originalResult);
 
@@ -73,14 +81,14 @@ function hook(func, options) {
             }
             message.result = stringifyResult ? stringifyResult(result, context) : result;
 
-            if (logLevel >= 1) {
+            if (logLevel >= LogLevel.Informational) {
                 console.log(JSON.stringify(message));
             }
 
             return result;
         };
     } catch (error) {
-        if (logLevel >= 1) {
+        if (logLevel >= LogLevel.Informational) {
             console.error(JSON.stringify({
                 stage: "error",
                 function: func,
